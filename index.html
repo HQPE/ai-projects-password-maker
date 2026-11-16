@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Projects · Password Maker</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #181b24; --line: #2a2f3d; --text: #e8eaf0;
+    --muted: #8b91a3; --accent: #5b8cff; --weak: #e5534b; --mid: #d4a72c;
+    --good: #57ab5a; --great: #2ea043;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px;
+  }
+  .card {
+    width: 100%; max-width: 480px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 16px; padding: 28px;
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .sub { margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+  .tab {
+    flex: 1; padding: 9px; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--muted); cursor: pointer; font-size: 14px;
+  }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .output {
+    display: flex; gap: 8px; align-items: center; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  }
+  #pw {
+    flex: 1; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 18px; word-break: break-all; min-height: 24px;
+  }
+  .icon-btn {
+    border: none; background: var(--line); color: var(--text);
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  .icon-btn:hover { background: #363c4d; }
+  .meter { height: 6px; background: var(--line); border-radius: 3px; margin: 12px 0 6px; overflow: hidden; }
+  .meter > div { height: 100%; width: 0; transition: width .25s, background .25s; }
+  .strength { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin: 14px 0; font-size: 15px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+  input[type=text] {
+    width: 60px; background: var(--bg); color: var(--text); text-align: center;
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px;
+  }
+  .gen {
+    width: 100%; margin-top: 18px; padding: 13px; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+  }
+  .gen:hover { filter: brightness(1.1); }
+  .hidden { display: none; }
+  footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>🔐 Password Maker</h1>
+  <p class="sub">Şifreler tamamen tarayıcında üretilir, hiçbir yere gönderilmez.</p>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="password">Şifre</button>
+    <button class="tab" data-mode="passphrase">Parola cümlesi</button>
+  </div>
+
+  <div class="output">
+    <span id="pw"></span>
+    <button class="icon-btn" id="copy">Kopyala</button>
+  </div>
+  <div class="meter"><div id="bar"></div></div>
+  <div class="strength" id="strength"></div>
+
+  <section id="password-opts">
+    <div class="row"><span>Uzunluk</span><strong id="lenVal">16</strong></div>
+    <input type="range" id="len" min="4" max="64" value="16">
+    <label class="row">Küçük harf (a-z) <input type="checkbox" id="lower" checked></label>
+    <label class="row">Büyük harf (A-Z) <input type="checkbox" id="upper" checked></label>
+    <label class="row">Rakam (0-9) <input type="checkbox" id="digits" checked></label>
+    <label class="row">Sembol (!@#…) <input type="checkbox" id="symbols" checked></label>
+    <label class="row">Karışan karakterleri çıkar (I l 1 O 0) <input type="checkbox" id="noAmb"></label>
+  </section>
+
+  <section id="passphrase-opts" class="hidden">
+    <div class="row"><span>Kelime sayısı</span><strong id="wordsVal">4</strong></div>
+    <input type="range" id="words" min="2" max="10" value="4">
+    <label class="row">Ayırıcı <input type="text" id="sep" value="-" maxlength="3"></label>
+    <label class="row">İlk harfleri büyüt <input type="checkbox" id="cap"></label>
+    <label class="row">Sona sayı ekle <input type="checkbox" id="num"></label>
+  </section>
+
+  <button class="gen" id="gen">Yeni şifre üret</button>
+  <footer>crypto.getRandomValues() ile güvenli rastgelelik</footer>
+</main>
+
+<script>
+const LOWER = "abcdefghijklmnopqrstuvwxyz";
+const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const DIGITS = "0123456789";
+const SYMBOLS = "!@#$%^&*()-_=+[]{};:,.<>?/";
+const AMBIGUOUS = new Set("Il1O0o");
+const WORDS = ["elma","armut","deniz","bulut","kalem","kitap","orman","nehir","dağ","yıldız","güneş","ay","rüzgar","kartal","aslan","kaplan","çiçek","toprak","ateş","buz","kum","taş","yol","köprü","kale","kapı","pencere","masa","sandalye","lamba","saat","zil","gemi","tren","uçak","bisiklet","balık","kedi","köpek","kuş","limon","kiraz","üzüm","portakal","çay","kahve","şeker","tuz","mavi","yeşil","kırmızı","sarı","mor","beyaz","siyah","turuncu","hızlı","sessiz","parlak","derin","yüksek","eski","yeni","sıcak","robot","gezegen","kuyruklu","pusula","harita","fener","çapa","yelken","bahar","yaz","güz","kış","sabah","akşam","gece","şafak"];
+
+const $ = id => document.getElementById(id);
+let mode = "password";
+
+// 0..max-1 arasında yanlılık olmadan güvenli rastgele sayı
+function randBelow(max) {
+  const limit = Math.floor(0x100000000 / max) * max;
+  const buf = new Uint32Array(1);
+  do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+  return buf[0] % max;
+}
+const pick = s => s[randBelow(s.length)];
+
+function makePassword() {
+  let groups = [];
+  if ($("lower").checked) groups.push(LOWER);
+  if ($("upper").checked) groups.push(UPPER);
+  if ($("digits").checked) groups.push(DIGITS);
+  if ($("symbols").checked) groups.push(SYMBOLS);
+  if ($("noAmb").checked) groups = groups.map(g => [...g].filter(c => !AMBIGUOUS.has(c)).join(""));
+  if (!groups.length) return { pw: "", bits: 0, error: "En az bir karakter türü seç." };
+
+  const len = +$("len").value;
+  const pool = groups.join("");
+  const chars = groups.map(pick);
+  while (chars.length < len) chars.push(pick(pool));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randBelow(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return { pw: chars.join(""), bits: len * Math.log2(pool.length) };
+}
+
+function makePassphrase() {
+  const n = +$("words").value;
+  let words = Array.from({ length: n }, () => pick(WORDS));
+  if ($("cap").checked) words = words.map(w => w[0].toLocaleUpperCase("tr") + w.slice(1));
+  let bits = n * Math.log2(WORDS.length);
+  if ($("num").checked) { words.push(String(randBelow(100))); bits += Math.log2(100); }
+  return { pw: words.join($("sep").value), bits };
+}
+
+function render() {
+  const r = mode === "password" ? makePassword() : makePassphrase();
+  $("pw").textContent = r.pw || "—";
+  const levels = [[40, "Zayıf", "--weak"], [60, "Orta", "--mid"], [80, "Güçlü", "--good"], [Infinity, "Çok güçlü", "--great"]];
+  const [, label, color] = levels.find(([max]) => r.bits < max);
+  $("bar").style.width = Math.min(100, r.bits / 1.28) + "%";
+  $("bar").style.background = `var(${color})`;
+  $("strength").textContent = r.error || `${label} · yaklaşık ${Math.round(r.bits)} bit entropi`;
+}
+
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === t));
+  mode = t.dataset.mode;
+  $("password-opts").classList.toggle("hidden", mode !== "password");
+  $("passphrase-opts").classList.toggle("hidden", mode !== "passphrase");
+  render();
+}));
+$("len").addEventListener("input", e => { $("lenVal").textContent = e.target.value; render(); });
+$("words").addEventListener("input", e => { $("wordsVal").textContent = e.target.value; render(); });
+document.querySelectorAll("input[type=checkbox], #sep").forEach(el => el.addEventListener("input", render));
+$("gen").addEventListener("click", render);
+$("copy").addEventListener("click", async () => {
+  const text = $("pw").textContent;
+  if (!text || text === "—") return;
+  try {
+    await navigator.clipboard.writeText(text);
+    $("copy").textContent = "Kopyalandı ✓";
+  } catch { $("copy").textContent = "Kopyalanamadı"; }
+  setTimeout(() => ($("copy").textContent = "Kopyala"), 1500);
+});
+render();
+</script>
+</body>
+</html>
